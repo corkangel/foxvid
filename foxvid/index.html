@@ -391,8 +391,9 @@ function drawLogo() {
   const cw = ovCanvas.width, ch = ovCanvas.height;
   ctx.clearRect(0, 0, cw, ch);
 
-  // size logo to ~70% of the smaller dimension
-  const scale = Math.min(cw, ch) * 0.7;
+  // size logo to ~70% with slow breathing animation
+  const breathe = 1.0 + 0.08 * Math.sin(performance.now() / 1000 * 0.5);
+  const scale = Math.min(cw, ch) * 0.7 * breathe;
   const aspect = logoImg.width / logoImg.height;
   let lw, lh;
   if (aspect > 1) { lw = scale; lh = scale / aspect; }
@@ -401,18 +402,17 @@ function drawLogo() {
   const lx = (cw - lw) / 2;
   const ly = (ch - lh) / 2;
 
-  // Use screen blend: draw logo, then composite
-  ctx.globalCompositeOperation = 'screen';
-  ctx.drawImage(logoImg, lx, ly, lw, lh);
-
-  // Add subtle glow
-  ctx.globalCompositeOperation = 'screen';
-  ctx.shadowColor = 'rgba(0, 200, 255, 0.4)';
-  ctx.shadowBlur = 30;
-  ctx.drawImage(logoImg, lx, ly, lw, lh);
-  ctx.shadowBlur = 0;
-
+  // Draw logo with drop shadow
   ctx.globalCompositeOperation = 'source-over';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+  ctx.shadowBlur = 20;
+  ctx.shadowOffsetX = 4;
+  ctx.shadowOffsetY = 4;
+  ctx.drawImage(logoImg, lx, ly, lw, lh);
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
 }
 
 // ============================================================
