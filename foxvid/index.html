@@ -33,6 +33,7 @@ canvas#overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; po
 <div id="ui">
   <button id="btnMic">Enable Mic</button>
   <button id="btnFullscreen">Fullscreen</button>
+  <button id="btnParticles" class="active">Particles</button>
   <button id="btnNext">Next Effect</button>
 </div>
 <div id="status"></div>
@@ -436,12 +437,86 @@ let logoState = 0;
 let logoStateStart = 0;
 const LOGO_STATE_DURATION = 12; // seconds per state
 
+// Particle system
+const particles = [];
+const MAX_PARTICLES = 300;
+let particlesEnabled = true;
+
+function spawnParticle(cw, ch) {
+  const angle = Math.random() * Math.PI * 2;
+  const speed = 60 + Math.random() * 180;
+  const size = 2 + Math.random() * 5;
+  // Spawn from center area (behind logo)
+  const spread = Math.min(cw, ch) * 0.15;
+  particles.push({
+    x: cw / 2 + (Math.random() - 0.5) * spread,
+    y: ch / 2 + (Math.random() - 0.5) * spread,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    life: 1.0,
+    decay: 0.15 + Math.random() * 0.25,
+    size,
+    hue: Math.random(), // 0-1 mapped to cyan/blue/teal
+  });
+}
+
+function updateAndDrawParticles(ctx, cw, ch, dt) {
+  // Spawn a few particles per frame
+  const spawnRate = 8 + Math.floor(audioSmooth.bass * 20);
+  for (let i = 0; i < spawnRate && particles.length < MAX_PARTICLES; i++) {
+    spawnParticle(cw, ch);
+  }
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.life -= p.decay * dt;
+
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+      continue;
+    }
+
+    // Color from hue — orange/amber/gold range
+    let r, g, b;
+    if (p.hue < 0.33) {
+      r = 255; g = Math.floor(100 + p.hue * 200); b = 0;
+    } else if (p.hue < 0.66) {
+      r = 255; g = Math.floor(160 + (p.hue - 0.33) * 200); b = Math.floor((p.hue - 0.33) * 90);
+    } else {
+      r = 255; g = Math.floor(200 + (p.hue - 0.66) * 165); b = Math.floor(30 + (p.hue - 0.66) * 60);
+    }
+
+    const alpha = p.life * 0.8;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.shadowColor = `rgba(${r},${g},${b},${alpha})`;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1.0;
+}
+
+let lastFrameTime = performance.now() / 1000;
+
 function drawLogo() {
   if (!logoReady) return;
   const ctx = ovCtx;
   const cw = ovCanvas.width, ch = ovCanvas.height;
 
   ctx.clearRect(0, 0, cw, ch);
+
+  const nowMs = performance.now() / 1000;
+  const dt = Math.min(nowMs - lastFrameTime, 0.05);
+  lastFrameTime = nowMs;
+
+  // Draw particles behind logo
+  if (particlesEnabled) updateAndDrawParticles(ctx, cw, ch, dt);
 
   const now = performance.now() / 1000;
 
@@ -560,6 +635,12 @@ document.getElementById('btnMic').addEventListener('click', initMic);
 document.getElementById('btnFullscreen').addEventListener('click', () => {
   document.documentElement.requestFullscreen?.() ||
   document.documentElement.webkitRequestFullscreen?.();
+});
+document.getElementById('btnParticles').addEventListener('click', () => {
+  particlesEnabled = !particlesEnabled;
+  const btn = document.getElementById('btnParticles');
+  btn.classList.toggle('active', particlesEnabled);
+  if (!particlesEnabled) particles.length = 0;
 });
 document.getElementById('btnNext').addEventListener('click', () => {
   if (!crossfading) {
