@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Foxy Codon Live Visuals</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+canvas#gl { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+canvas#overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+#ui {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  z-index: 10; display: flex; gap: 12px; opacity: 0.8; transition: opacity 0.3s;
+}
+#ui:hover { opacity: 1; }
+#ui button {
+  background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+  color: #fff; padding: 8px 16px; border-radius: 20px; cursor: pointer;
+  font: 14px sans-serif; backdrop-filter: blur(8px);
+}
+#ui button:hover { background: rgba(255,255,255,0.3); }
+#ui button.active { background: rgba(255,50,150,0.5); border-color: #f39; }
+#status {
+  position: fixed; top: 10px; right: 10px; color: rgba(255,255,255,0.5);
+  font: 12px monospace; z-index: 10;
+}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="overlay"></canvas>
+<div id="ui">
+  <button id="btnMic">Enable Mic</button>
+  <button id="btnFullscreen">Fullscreen</button>
+  <button id="btnNext">Next Effect</button>
+</div>
+<div id="status"></div>
+
+<script>
+// ============================================================
+// WEBGL SETUP
+// ============================================================
+const glCanvas = document.getElementById('gl');
+const gl = glCanvas.getContext('webgl2', { antialias: false, preserveDrawingBuffer: false });
+const ovCanvas = document.getElementById('overlay');
+const ovCtx = ovCanvas.getContext('2d');
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = window.innerWidth, h = window.innerHeight;
+  glCanvas.width = w * dpr; glCanvas.height = h * dpr;
+  ovCanvas.width = w * dpr; ovCanvas.height = h * dpr;
+  gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ============================================================
+// SHADER COMPILATION
+// ============================================================
+function compileShader(src, type) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(s));
+    return null;
+  }
+  return s;
+}
+
+function createProgram(vSrc, fSrc) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compileShader(vSrc, gl.VERTEX_SHADER));
+  gl.attachShader(p, compileShader(fSrc, gl.FRAGMENT_SHADER));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(p));
+    return null;
+  }
+  return p;
+}
+
+const vertSrc = `#version 300 es
+in vec2 pos;
+out vec2 uv;
+void main() {
+  uv = pos * 0.5 + 0.5;
+  gl_Position = vec4(pos, 0.0, 1.0);
+}`;
+
+// ============================================================
+// FRAGMENT SHADERS — each is a different visual effect
+// ============================================================
+const shaders = [];
+
+// Effect 0: Neon Tunnel Rays
+shaders.push(`#version 300 es
+precision highp float;
+in vec2 uv;
+out vec4 fragColor;
+uniform float time;
+uniform float bass;
+uniform float mid;
+uniform float high;
+uniform vec2 resolution;
+
+void main() {
+  vec2 p = (uv - 0.5) * vec2(resolution.x / resolution.y, 1.0);
+  float angle = atan(p.y, p.x);
+  float dist = length(p);
+
+  float pulse = 1.0 + bass * 0.4;
+  float rays = sin(angle * 8.0 + time * 0.7) * 0.5 + 0.5;
+  rays *= sin(angle * 13.0 - time * 1.1) * 0.5 + 0.5;
+  float tunnel = sin(1.0 / (dist + 0.01) * 0.3 - time * 2.0 * pulse) * 0.5 + 0.5;
+
+  float glow = rays * tunnel * smoothstep(1.2, 0.0, dist);
+
+  float hue = angle / 6.2832 + time * 0.05 + mid * 0.3;
+  vec3 col1 = vec3(1.0, 0.1, 0.5);  // hot pink
+  vec3 col2 = vec3(0.4, 0.0, 1.0);  // purple
+  vec3 col3 = vec3(0.0, 0.5, 1.0);  // blue
+
+  float t = fract(hue);
+  vec3 col;
+  if (t < 0.33) col = mix(col1, col2, t * 3.0);
+  else if (t < 0.66) col = mix(col2, col3, (t - 0.33) * 3.0);
+  else col = mix(col3, col1, (t - 0.66) * 3.0);
+
+  col *= glow * (1.5 + high * 1.0);
+  col += vec3(0.9, 0.2, 0.6) * pow(glow, 3.0) * 0.5;
+
+  fragColor = vec4(col, 1.0);
+}
+`);
+
+// Effect 1: Plasma Swirl
+shaders.push(`#version 300 es
+precision highp float;
+in vec2 uv;
+out vec4 fragColor;
+uniform float time;
+uniform float bass;
+uniform float mid;
+uniform float high;
+uniform vec2 resolution;
+
+void main() {
+  vec2 p = (uv - 0.5) * vec2(resolution.x / resolution.y, 1.0) * 3.0;
+  float pulse = 1.0 + bass * 0.5;
+
+  float v = 0.0;
+  v += sin(p.x * 1.5 + time * pulse);
+  v += sin((p.y * 1.5 + time * 0.7) * 1.2);
+  v += sin((p.x * 1.5 + p.y * 1.5 + time * 0.5) * 0.8);
+
+  float cx = p.x + 0.5 * sin(time * 0.3);
+  float cy = p.y + 0.5 * cos(time * 0.4);
+  v += sin(sqrt(cx * cx + cy * cy + 1.0) * 2.0 - time * 1.5);
+
+  v *= 0.5;
+  float shift = mid * 0.5;
+
+  vec3 col;
+  col.r = sin(v * 3.14159 + shift) * 0.5 + 0.5;
+  col.g = sin(v * 3.14159 + 2.094 + shift) * 0.5 + 0.5;
+  col.b = sin(v * 3.14159 + 4.188 + shift) * 0.5 + 0.5;
+
+  // push toward pink/purple palette
+  col = mix(col, vec3(col.r * 1.2, col.g * 0.3, col.b * 1.1), 0.5);
+  col *= 1.2 + high * 0.5;
+
+  fragColor = vec4(col, 1.0);
+}
+`);
+
+// Effect 2: Kaleidoscope
+shaders.push(`#version 300 es
+precision highp float;
+in vec2 uv;
+out vec4 fragColor;
+uniform float time;
+uniform float bass;
+uniform float mid;
+uniform float high;
+uniform vec2 resolution;
+
+#define PI 3.14159265
+
+void main() {
+  vec2 p = (uv - 0.5) * vec2(resolution.x / resolution.y, 1.0);
+  float angle = atan(p.y, p.x);
+  float dist = length(p);
+
+  float segments = 6.0 + floor(mid * 4.0);
+  angle = mod(angle, 2.0 * PI / segments);
+  angle = abs(angle - PI / segments);
+
+  vec2 kp = vec2(cos(angle), sin(angle)) * dist;
+
+  float pulse = 1.0 + bass * 0.6;
+  float pattern = 0.0;
+  pattern += sin(kp.x * 10.0 + time * pulse) * 0.5;
+  pattern += sin(kp.y * 8.0 - time * 0.8) * 0.5;
+  pattern += sin((kp.x + kp.y) * 6.0 + time * 0.6) * 0.5;
+  pattern += sin(dist * 12.0 - time * 2.5) * 0.3;
+
+  vec3 col;
+  col.r = sin(pattern * 2.0 + time * 0.3) * 0.5 + 0.5;
+  col.g = sin(pattern * 2.0 + time * 0.3 + 1.0) * 0.5 + 0.5;
+  col.b = sin(pattern * 2.0 + time * 0.3 + 2.0) * 0.5 + 0.5;
+
+  // neon pink/purple tint
+  col = col * vec3(1.3, 0.4, 1.2);
+  col += vec3(0.2, 0.0, 0.3);
+  col *= 1.0 + high * 0.4;
+
+  float vignette = 1.0 - dist * 0.6;
+  col *= max(vignette, 0.2);
+
+  fragColor = vec4(col, 1.0);
+}
+`);
+
+// Effect 3: Waveform Rings
+shaders.push(`#version 300 es
+precision highp float;
+in vec2 uv;
+out vec4 fragColor;
+uniform float time;
+uniform float bass;
+uniform float mid;
+uniform float high;
+uniform vec2 resolution;
+
+void main() {
+  vec2 p = (uv - 0.5) * vec2(resolution.x / resolution.y, 1.0);
+  float dist = length(p);
+  float angle = atan(p.y, p.x);
+
+  float pulse = 1.0 + bass * 0.5;
+
+  float rings = 0.0;
+  for (float i = 0.0; i < 5.0; i++) {
+    float r = 0.15 + i * 0.12;
+    float wave = sin(angle * (3.0 + i * 2.0) + time * (1.0 + i * 0.3) * pulse) * 0.03 * (1.0 + mid);
+    float ring = smoothstep(0.02, 0.0, abs(dist - r - wave));
+    float hue = fract(i * 0.2 + time * 0.1);
+    vec3 rcol;
+    if (hue < 0.33) rcol = mix(vec3(1.0, 0.1, 0.5), vec3(0.5, 0.0, 1.0), hue * 3.0);
+    else if (hue < 0.66) rcol = mix(vec3(0.5, 0.0, 1.0), vec3(0.0, 0.4, 1.0), (hue - 0.33) * 3.0);
+    else rcol = mix(vec3(0.0, 0.4, 1.0), vec3(1.0, 0.1, 0.5), (hue - 0.66) * 3.0);
+    rings += ring;
+    fragColor.rgb += rcol * ring * (1.5 + high);
+  }
+
+  // center glow
+  float cg = exp(-dist * 4.0) * (0.3 + bass * 0.5);
+  fragColor.rgb += vec3(0.8, 0.1, 0.5) * cg;
+
+  // background
+  fragColor.rgb += vec3(0.05, 0.0, 0.1) * (1.0 - dist);
+  fragColor.a = 1.0;
+}
+`);
+
+// Effect 4: Fractal Noise Flow
+shaders.push(`#version 300 es
+precision highp float;
+in vec2 uv;
+out vec4 fragColor;
+uniform float time;
+uniform float bass;
+uniform float mid;
+uniform float high;
+uniform vec2 resolution;
+
+vec3 hash3(vec3 p) {
+  p = vec3(dot(p, vec3(127.1, 311.7, 74.7)),
+           dot(p, vec3(269.5, 183.3, 246.1)),
+           dot(p, vec3(113.5, 271.9, 124.6)));
+  return fract(sin(p) * 43758.5453);
+}
+
+float noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = dot(hash3(vec3(i, 0.0)).xy, vec2(1.0));
+  float b = dot(hash3(vec3(i + vec2(1.0, 0.0), 0.0)).xy, vec2(1.0));
+  float c = dot(hash3(vec3(i + vec2(0.0, 1.0), 0.0)).xy, vec2(1.0));
+  float d = dot(hash3(vec3(i + vec2(1.0, 1.0), 0.0)).xy, vec2(1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float fbm(vec2 p) {
+  float v = 0.0, a = 0.5;
+  mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
+  for (int i = 0; i < 5; i++) {
+    v += a * noise(p);
+    p = rot * p * 2.0;
+    a *= 0.5;
+  }
+  return v;
+}
+
+void main() {
+  vec2 p = (uv - 0.5) * vec2(resolution.x / resolution.y, 1.0) * 3.0;
+  float pulse = 1.0 + bass * 0.3;
+
+  float t = time * 0.2 * pulse;
+  float n1 = fbm(p + vec2(t, t * 0.7));
+  float n2 = fbm(p + vec2(n1 * 2.0 + t * 0.3, n1 * 1.5 - t * 0.2));
+  float n3 = fbm(p + vec2(n2 * 1.5 - t * 0.1, n2 * 2.0 + t * 0.4));
+
+  vec3 col = vec3(0.0);
+  col = mix(vec3(0.1, 0.0, 0.2), vec3(1.0, 0.1, 0.5), n2 * n2);
+  col = mix(col, vec3(0.3, 0.0, 1.0), n3 * 0.8);
+  col += vec3(0.9, 0.3, 0.6) * pow(n1, 3.0) * (1.0 + high);
+
+  col *= 1.2 + mid * 0.3;
+  fragColor = vec4(col, 1.0);
+}
+`);
+
+// Effect 5: Hypnotic Spiral
+shaders.push(`#version 300 es
+precision highp float;
+in vec2 uv;
+out vec4 fragColor;
+uniform float time;
+uniform float bass;
+uniform float mid;
+uniform float high;
+uniform vec2 resolution;
+
+#define PI 3.14159265
+
+void main() {
+  vec2 p = (uv - 0.5) * vec2(resolution.x / resolution.y, 1.0);
+  float dist = length(p);
+  float angle = atan(p.y, p.x);
+
+  float pulse = 1.0 + bass * 0.5;
+  float spiral = sin(angle * 3.0 + dist * 15.0 - time * 3.0 * pulse) * 0.5 + 0.5;
+  float spiral2 = sin(angle * 5.0 - dist * 10.0 + time * 2.0) * 0.5 + 0.5;
+
+  float pattern = spiral * spiral2;
+  pattern *= smoothstep(1.5, 0.0, dist);
+
+  float hue = fract(dist * 2.0 - time * 0.15 + mid * 0.2);
+  vec3 col;
+  if (hue < 0.25) col = mix(vec3(1.0, 0.0, 0.5), vec3(0.8, 0.0, 1.0), hue * 4.0);
+  else if (hue < 0.5) col = mix(vec3(0.8, 0.0, 1.0), vec3(0.0, 0.3, 1.0), (hue - 0.25) * 4.0);
+  else if (hue < 0.75) col = mix(vec3(0.0, 0.3, 1.0), vec3(0.0, 0.8, 0.8), (hue - 0.5) * 4.0);
+  else col = mix(vec3(0.0, 0.8, 0.8), vec3(1.0, 0.0, 0.5), (hue - 0.75) * 4.0);
+
+  col *= pattern * (1.5 + high * 0.5);
+  col += vec3(0.05, 0.0, 0.1);
+
+  fragColor = vec4(col, 1.0);
+}
+`);
+
+// ============================================================
+// COMPILE ALL PROGRAMS
+// ============================================================
+const programs = shaders.map(fSrc => createProgram(vertSrc, fSrc));
+let currentEffect = 0;
+const EFFECT_DURATION = 15; // seconds per effect before auto-cycling
+let effectStartTime = 0;
+
+// Fullscreen quad
+const quad = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+// ============================================================
+// LOGO
+// ============================================================
+const logoImg = new Image();
+logoImg.src = 'logo.png';
+let logoReady = false;
+logoImg.onload = () => { logoReady = true; };
+
+function drawLogo() {
+  if (!logoReady) return;
+  const ctx = ovCtx;
+  const cw = ovCanvas.width, ch = ovCanvas.height;
+  ctx.clearRect(0, 0, cw, ch);
+
+  // size logo to ~70% of the smaller dimension
+  const scale = Math.min(cw, ch) * 0.7;
+  const aspect = logoImg.width / logoImg.height;
+  let lw, lh;
+  if (aspect > 1) { lw = scale; lh = scale / aspect; }
+  else { lh = scale; lw = scale * aspect; }
+
+  const lx = (cw - lw) / 2;
+  const ly = (ch - lh) / 2;
+
+  // Use screen blend: draw logo, then composite
+  ctx.globalCompositeOperation = 'screen';
+  ctx.drawImage(logoImg, lx, ly, lw, lh);
+
+  // Add subtle glow
+  ctx.globalCompositeOperation = 'screen';
+  ctx.shadowColor = 'rgba(255, 50, 150, 0.4)';
+  ctx.shadowBlur = 30;
+  ctx.drawImage(logoImg, lx, ly, lw, lh);
+  ctx.shadowBlur = 0;
+
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+// ============================================================
+// AUDIO
+// ============================================================
+let audioCtx = null;
+let analyser = null;
+let audioData = null;
+let micActive = false;
+
+const audio = { bass: 0, mid: 0, high: 0 };
+const audioSmooth = { bass: 0, mid: 0, high: 0 };
+
+async function initMic() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new AudioContext();
+    const source = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.8;
+    source.connect(analyser);
+    audioData = new Uint8Array(analyser.frequencyBinCount);
+    micActive = true;
+    document.getElementById('btnMic').classList.add('active');
+    document.getElementById('btnMic').textContent = 'Mic On';
+  } catch (e) {
+    console.error('Mic access denied:', e);
+    document.getElementById('status').textContent = 'Mic denied';
+  }
+}
+
+function updateAudio() {
+  if (!micActive || !analyser) return;
+  analyser.getByteFrequencyData(audioData);
+  const n = audioData.length;
+
+  // Split into 3 bands
+  let bassSum = 0, midSum = 0, highSum = 0;
+  const bassEnd = Math.floor(n * 0.15);
+  const midEnd = Math.floor(n * 0.5);
+
+  for (let i = 0; i < bassEnd; i++) bassSum += audioData[i];
+  for (let i = bassEnd; i < midEnd; i++) midSum += audioData[i];
+  for (let i = midEnd; i < n; i++) highSum += audioData[i];
+
+  audio.bass = bassSum / (bassEnd * 255);
+  audio.mid = midSum / ((midEnd - bassEnd) * 255);
+  audio.high = highSum / ((n - midEnd) * 255);
+
+  // Smooth with different attack/release
+  const attack = 0.3, release = 0.05;
+  for (const key of ['bass', 'mid', 'high']) {
+    const rate = audio[key] > audioSmooth[key] ? attack : release;
+    audioSmooth[key] += (audio[key] - audioSmooth[key]) * rate;
+  }
+}
+
+// ============================================================
+// CONTROLS
+// ============================================================
+document.getElementById('btnMic').addEventListener('click', initMic);
+document.getElementById('btnFullscreen').addEventListener('click', () => {
+  document.documentElement.requestFullscreen?.() ||
+  document.documentElement.webkitRequestFullscreen?.();
+});
+document.getElementById('btnNext').addEventListener('click', () => {
+  currentEffect = (currentEffect + 1) % programs.length;
+  effectStartTime = performance.now() / 1000;
+});
+
+// Hide UI after inactivity
+let uiTimeout;
+function showUI() {
+  document.getElementById('ui').style.display = 'flex';
+  clearTimeout(uiTimeout);
+  uiTimeout = setTimeout(() => {
+    document.getElementById('ui').style.display = 'none';
+  }, 5000);
+}
+document.addEventListener('mousemove', showUI);
+document.addEventListener('touchstart', showUI);
+showUI();
+
+// ============================================================
+// RENDER LOOP
+// ============================================================
+let startTime = performance.now() / 1000;
+effectStartTime = startTime;
+
+function render() {
+  requestAnimationFrame(render);
+
+  const now = performance.now() / 1000;
+  const time = now - startTime;
+
+  // Auto-cycle effects
+  if (now - effectStartTime > EFFECT_DURATION) {
+    currentEffect = (currentEffect + 1) % programs.length;
+    effectStartTime = now;
+  }
+
+  updateAudio();
+
+  const prog = programs[currentEffect];
+  if (!prog) return;
+
+  gl.useProgram(prog);
+
+  // Set uniforms
+  const tLoc = gl.getUniformLocation(prog, 'time');
+  const rLoc = gl.getUniformLocation(prog, 'resolution');
+  const bLoc = gl.getUniformLocation(prog, 'bass');
+  const mLoc = gl.getUniformLocation(prog, 'mid');
+  const hLoc = gl.getUniformLocation(prog, 'high');
+
+  gl.uniform1f(tLoc, time);
+  gl.uniform2f(rLoc, glCanvas.width, glCanvas.height);
+  gl.uniform1f(bLoc, audioSmooth.bass);
+  gl.uniform1f(mLoc, audioSmooth.mid);
+  gl.uniform1f(hLoc, audioSmooth.high);
+
+  // Draw quad
+  const posLoc = gl.getAttribLocation(prog, 'pos');
+  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  gl.enableVertexAttribArray(posLoc);
+  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+  // Logo overlay
+  drawLogo();
+}
+
+render();
+</script>
+</body>
+</html>
