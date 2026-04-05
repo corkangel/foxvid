@@ -739,6 +739,19 @@ function render() {
 }
 
 render();
+
+// Wake Lock — prevent iPad/device from sleeping
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      await navigator.wakeLock.request('screen');
+    }
+  } catch (e) { /* ignore */ }
+}
+requestWakeLock();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') requestWakeLock();
+});
 </script>
 </body>
 </html>
