@@ -20,7 +20,7 @@ canvas#overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; po
   font: 14px sans-serif; backdrop-filter: blur(8px);
 }
 #ui button:hover { background: rgba(255,255,255,0.3); }
-#ui button.active { background: rgba(255,50,150,0.5); border-color: #f39; }
+#ui button.active { background: rgba(0,180,255,0.5); border-color: #0cf; }
 #status {
   position: fixed; top: 10px; right: 10px; color: rgba(255,255,255,0.5);
   font: 12px monospace; z-index: 10;
@@ -119,9 +119,9 @@ void main() {
   float glow = rays * tunnel * smoothstep(1.2, 0.0, dist);
 
   float hue = angle / 6.2832 + time * 0.05 + mid * 0.3;
-  vec3 col1 = vec3(1.0, 0.1, 0.5);  // hot pink
-  vec3 col2 = vec3(0.4, 0.0, 1.0);  // purple
-  vec3 col3 = vec3(0.0, 0.5, 1.0);  // blue
+  vec3 col1 = vec3(0.0, 0.8, 1.0);  // cyan
+  vec3 col2 = vec3(0.0, 0.4, 1.0);  // blue
+  vec3 col3 = vec3(0.0, 1.0, 0.6);  // teal/green
 
   float t = fract(hue);
   vec3 col;
@@ -130,7 +130,7 @@ void main() {
   else col = mix(col3, col1, (t - 0.66) * 3.0);
 
   col *= glow * (1.5 + high * 1.0);
-  col += vec3(0.9, 0.2, 0.6) * pow(glow, 3.0) * 0.5;
+  col += vec3(0.2, 0.9, 0.8) * pow(glow, 3.0) * 0.5;
 
   fragColor = vec4(col, 1.0);
 }
@@ -168,8 +168,8 @@ void main() {
   col.g = sin(v * 3.14159 + 2.094 + shift) * 0.5 + 0.5;
   col.b = sin(v * 3.14159 + 4.188 + shift) * 0.5 + 0.5;
 
-  // push toward pink/purple palette
-  col = mix(col, vec3(col.r * 1.2, col.g * 0.3, col.b * 1.1), 0.5);
+  // push toward blue/cyan/teal palette
+  col = mix(col, vec3(col.r * 0.2, col.g * 0.9, col.b * 1.3), 0.5);
   col *= 1.2 + high * 0.5;
 
   fragColor = vec4(col, 1.0);
@@ -212,9 +212,9 @@ void main() {
   col.g = sin(pattern * 2.0 + time * 0.3 + 1.0) * 0.5 + 0.5;
   col.b = sin(pattern * 2.0 + time * 0.3 + 2.0) * 0.5 + 0.5;
 
-  // neon pink/purple tint
-  col = col * vec3(1.3, 0.4, 1.2);
-  col += vec3(0.2, 0.0, 0.3);
+  // neon blue/cyan/teal tint
+  col = col * vec3(0.3, 1.0, 1.3);
+  col += vec3(0.0, 0.1, 0.2);
   col *= 1.0 + high * 0.4;
 
   float vignette = 1.0 - dist * 0.6;
@@ -249,19 +249,19 @@ void main() {
     float ring = smoothstep(0.02, 0.0, abs(dist - r - wave));
     float hue = fract(i * 0.2 + time * 0.1);
     vec3 rcol;
-    if (hue < 0.33) rcol = mix(vec3(1.0, 0.1, 0.5), vec3(0.5, 0.0, 1.0), hue * 3.0);
-    else if (hue < 0.66) rcol = mix(vec3(0.5, 0.0, 1.0), vec3(0.0, 0.4, 1.0), (hue - 0.33) * 3.0);
-    else rcol = mix(vec3(0.0, 0.4, 1.0), vec3(1.0, 0.1, 0.5), (hue - 0.66) * 3.0);
+    if (hue < 0.33) rcol = mix(vec3(0.0, 0.8, 1.0), vec3(0.0, 0.4, 1.0), hue * 3.0);
+    else if (hue < 0.66) rcol = mix(vec3(0.0, 0.4, 1.0), vec3(0.0, 1.0, 0.5), (hue - 0.33) * 3.0);
+    else rcol = mix(vec3(0.0, 1.0, 0.5), vec3(0.0, 0.8, 1.0), (hue - 0.66) * 3.0);
     rings += ring;
     fragColor.rgb += rcol * ring * (1.5 + high);
   }
 
   // center glow
   float cg = exp(-dist * 4.0) * (0.3 + bass * 0.5);
-  fragColor.rgb += vec3(0.8, 0.1, 0.5) * cg;
+  fragColor.rgb += vec3(0.1, 0.6, 0.8) * cg;
 
   // background
-  fragColor.rgb += vec3(0.05, 0.0, 0.1) * (1.0 - dist);
+  fragColor.rgb += vec3(0.0, 0.05, 0.1) * (1.0 - dist);
   fragColor.a = 1.0;
 }
 `);
@@ -316,9 +316,9 @@ void main() {
   float n3 = fbm(p + vec2(n2 * 1.5 - t * 0.1, n2 * 2.0 + t * 0.4));
 
   vec3 col = vec3(0.0);
-  col = mix(vec3(0.1, 0.0, 0.2), vec3(1.0, 0.1, 0.5), n2 * n2);
-  col = mix(col, vec3(0.3, 0.0, 1.0), n3 * 0.8);
-  col += vec3(0.9, 0.3, 0.6) * pow(n1, 3.0) * (1.0 + high);
+  col = mix(vec3(0.0, 0.05, 0.15), vec3(0.0, 0.7, 0.9), n2 * n2);
+  col = mix(col, vec3(0.0, 0.3, 1.0), n3 * 0.8);
+  col += vec3(0.1, 0.9, 0.7) * pow(n1, 3.0) * (1.0 + high);
 
   col *= 1.2 + mid * 0.3;
   fragColor = vec4(col, 1.0);
@@ -352,13 +352,13 @@ void main() {
 
   float hue = fract(dist * 2.0 - time * 0.15 + mid * 0.2);
   vec3 col;
-  if (hue < 0.25) col = mix(vec3(1.0, 0.0, 0.5), vec3(0.8, 0.0, 1.0), hue * 4.0);
-  else if (hue < 0.5) col = mix(vec3(0.8, 0.0, 1.0), vec3(0.0, 0.3, 1.0), (hue - 0.25) * 4.0);
-  else if (hue < 0.75) col = mix(vec3(0.0, 0.3, 1.0), vec3(0.0, 0.8, 0.8), (hue - 0.5) * 4.0);
-  else col = mix(vec3(0.0, 0.8, 0.8), vec3(1.0, 0.0, 0.5), (hue - 0.75) * 4.0);
+  if (hue < 0.25) col = mix(vec3(0.0, 0.8, 1.0), vec3(0.0, 0.3, 1.0), hue * 4.0);
+  else if (hue < 0.5) col = mix(vec3(0.0, 0.3, 1.0), vec3(0.0, 1.0, 0.6), (hue - 0.25) * 4.0);
+  else if (hue < 0.75) col = mix(vec3(0.0, 1.0, 0.6), vec3(0.0, 0.6, 0.8), (hue - 0.5) * 4.0);
+  else col = mix(vec3(0.0, 0.6, 0.8), vec3(0.0, 0.8, 1.0), (hue - 0.75) * 4.0);
 
   col *= pattern * (1.5 + high * 0.5);
-  col += vec3(0.05, 0.0, 0.1);
+  col += vec3(0.0, 0.03, 0.08);
 
   fragColor = vec4(col, 1.0);
 }
@@ -407,7 +407,7 @@ function drawLogo() {
 
   // Add subtle glow
   ctx.globalCompositeOperation = 'screen';
-  ctx.shadowColor = 'rgba(255, 50, 150, 0.4)';
+  ctx.shadowColor = 'rgba(0, 200, 255, 0.4)';
   ctx.shadowBlur = 30;
   ctx.drawImage(logoImg, lx, ly, lw, lh);
   ctx.shadowBlur = 0;
