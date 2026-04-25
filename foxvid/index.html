@@ -549,11 +549,19 @@ function drawLogo() {
     scaleAmt = 1.0 + 0.12 * beat * blend;
   }
 
-  const baseScale = Math.min(cw, ch) * 0.9 * scaleAmt;
+  // Fill the window — fit to whichever dimension is tighter
   const aspect = logoImg.width / logoImg.height;
+  const screenAspect = cw / ch;
   let lw, lh;
-  if (aspect > 1) { lw = baseScale; lh = baseScale / aspect; }
-  else { lh = baseScale; lw = baseScale * aspect; }
+  if (screenAspect > aspect) {
+    // Screen is wider than logo — fit to height
+    lh = ch * scaleAmt;
+    lw = lh * aspect;
+  } else {
+    // Screen is taller than logo — fit to width
+    lw = cw * scaleAmt;
+    lh = lw / aspect;
+  }
 
   ctx.save();
   ctx.translate(cw / 2, ch / 2);
