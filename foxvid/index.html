@@ -47,12 +47,14 @@ const gl = glCanvas.getContext('webgl2', { antialias: false, preserveDrawingBuff
 const ovCanvas = document.getElementById('overlay');
 const ovCtx = ovCanvas.getContext('2d');
 
+const resizeCallbacks = [];
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   const w = window.innerWidth, h = window.innerHeight;
   glCanvas.width = w * dpr; glCanvas.height = h * dpr;
   ovCanvas.width = w * dpr; ovCanvas.height = h * dpr;
   gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+  resizeCallbacks.forEach(cb => cb());
 }
 window.addEventListener('resize', resize);
 resize();
@@ -401,14 +403,12 @@ let fboA = createFBO();
 let fboB = createFBO();
 
 // Resize FBOs when window resizes
-const origResize = resize;
-resize = function() {
-  origResize();
+resizeCallbacks.push(() => {
   [fboA, fboB].forEach(f => {
     gl.bindTexture(gl.TEXTURE_2D, f.tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, glCanvas.width, glCanvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
   });
-};
+});
 
 // Mix shader for crossfade
 const mixFragSrc = `#version 300 es
